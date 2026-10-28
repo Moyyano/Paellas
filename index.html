@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Paellas</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Paellas">
+<meta name="theme-color" content="#1b1f24">
+<style>
+:root{--bg:#1b1f24;--card:#252a31;--line:#343b44;--txt:#eef0f2;--sub:#9aa3ad;--acc:#f0a020;--ok:#5cc28a;--mal:#e36b5b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg)}
+html{-webkit-text-size-adjust:100%}
+body{color:var(--txt);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(12px + env(safe-area-inset-top,0px)) calc(88px + env(safe-area-inset-bottom,0px));max-width:560px;margin:0 auto}
+input,textarea,select{font-size:16px}
+h1{font-size:26px;margin:8px 0 14px}
+h3{margin:0 0 10px;font-size:17px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;color:var(--sub);font-size:14px;margin-bottom:10px}
+input,textarea{display:block;width:100%;margin-top:4px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-family:inherit}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:46px}
+input:focus,textarea:focus{outline:2px solid var(--acc);border-color:transparent}
+.fila{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{background:var(--acc);color:#1b1f24;border:0;border-radius:10px;padding:12px 16px;font-weight:700;font-size:16px;font-family:inherit}
+.btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+.btn.mal{background:transparent;color:var(--mal);border:1px solid var(--mal)}
+.btn.ancho{width:100%}
+.botones{display:flex;gap:8px;flex-wrap:wrap}
+.botones .btn{flex:1}
+.cuentas{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:15px}
+.cuentas .t{font-weight:700;font-size:18px;padding-top:6px;border-top:1px solid var(--line);margin-top:4px}
+.cuentas span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+.nota{color:var(--sub);font-size:14px;margin:0 0 10px}
+.mes{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.mes button{background:var(--card);color:var(--txt);border:0;border-radius:10px;width:44px;height:44px;font-size:20px}
+.mes b{font-size:19px;text-transform:capitalize}
+.dia{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.dia:first-of-type{border-top:0}
+.dia small{color:var(--sub);display:block}
+.dia .eur{font-weight:700;font-variant-numeric:tabular-nums}
+pre{white-space:pre-wrap;font:14px/1.45 ui-monospace,Menlo,monospace;background:var(--bg);border-radius:10px;padding:12px;margin:0 0 10px;max-height:340px;overflow:auto}
+nav{position:fixed;left:0;right:0;bottom:0;padding:6px 16px calc(6px + env(safe-area-inset-bottom,0px));background:#14171b;border-top:1px solid var(--line);display:flex;justify-content:center;gap:4px}
+nav button{flex:1;max-width:180px;background:none;border:0;color:var(--sub);font:600 13px/1.2 inherit;padding:8px 0;font-family:inherit}
+nav button .ico{display:block;font-size:22px;margin-bottom:2px}
+nav button.on{color:var(--acc)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:#3a414b;color:var(--txt);padding:10px 16px;border-radius:12px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<nav id="nav"></nav>
+<div id="toast"></div>
+<script>
+/* ---------- Datos ---------- */
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){toast("No se pudo guardar en el móvil");return false}};
+// dias: { "AAAA-MM-DD": {horas, kmIni, kmFin, propinas, eurHora, eur10km} }
+let dias=lsGet("paellas_dias",{});
+let cfg=Object.assign({eurHora:9,eur10km:1.35},lsGet("paellas_cfg",{}));
+const guardarDias=()=>{lsSet("paellas_dias",dias);syncEstado()};
+
+/* ---------- Utilidades ---------- */
+const pad=n=>String(n).padStart(2,"0");
+const hoyISO=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const fechaLarga=f=>{const [a,m,d]=f.split("-").map(Number),dw=new Date(a,m-1,d).getDay();return `${DIAS[dw][0].toUpperCase()+DIAS[dw].slice(1)} ${d} de ${MESES[m-1]}`};
+const eur=n=>n.toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+const num=(n,dec=2)=>n.toLocaleString("es-ES",{maximumFractionDigits:dec});
+const r2=n=>Math.round(n*100)/100;
+// Acepta "4,5", "4.5" o "4:30"
+function leerNum(s){s=String(s??"").trim();if(!s)return NaN;
+  const hm=s.match(/^(\d+):(\d{1,2})$/);if(hm)return +hm[1]+ +hm[2]/60;
+  return Number(s.replace(/\s/g,"").replace(",","."))}
+const fmtH=h=>{const min=Math.round(h*60),hh=Math.floor(min/60),mm=min%60;return mm?`${hh} h ${mm} min`:`${hh} h`};
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function toast(t){const e=document.getElementById("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),2600)}
+
+// Cuentas de un día (cada día guarda las tarifas con las que se apuntó)
+function cuentas(d){
+  const km=Math.max(0,d.kmFin-d.kmIni);
+  const pHoras=r2(d.horas*d.eurHora), pKm=r2(km*d.eur10km/10), prop=r2(d.propinas||0);
+  return {km,pHoras,pKm,prop,total:r2(pHoras+pKm+prop)};
+}
+function diasDelMes(mes){return Object.keys(dias).filter(f=>f.startsWith(mes)).sort()}
+
+/* ---------- Pestañas ---------- */
+const TABS=["apuntar","mes","ajustes"];
+const NOMBRES={apuntar:["✏️","Apuntar"],mes:["📋","Mes"],ajustes:["⚙️","Ajustes"]};
+let tab=TABS.includes(location.hash.slice(1))?location.hash.slice(1):"apuntar";
+let fechaSel=hoyISO(), mesSel=hoyISO().slice(0,7);
+function setTab(t){tab=t;if(location.hash!=="#"+t)history.replaceState(null,"","#"+t);pintar();scrollTo(0,0)}
+function pintar(){
+  document.getElementById("nav").innerHTML=TABS.map(t=>`<button class="${t===tab?"on":""}" data-t="${t}"><span class="ico">${NOMBRES[t][0]}</span>${NOMBRES[t][1]}</button>`).join("");
+  document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+  ({apuntar:vApuntar,mes:vMes,ajustes:vAjustes})[tab]();
+}
+
+/* ---------- Apuntar ---------- */
+function ultimoKm(antesDe){const f=Object.keys(dias).filter(x=>x<antesDe).sort().pop();return f?dias[f].kmFin:""}
+function vApuntar(){
+  const d=dias[fechaSel], nuevo=!d;
+  const v=d||{horas:"",kmIni:ultimoKm(fechaSel),kmFin:"",propinas:""};
+  const show=x=>x===""||x==null?"":String(x).replace(".",",");
+  document.getElementById("view").innerHTML=`<h1>Apuntar día</h1>
+  <section class="card">
+    <label>Día<input type="date" id="f-fecha" value="${fechaSel}"></label>
+    <p class="nota">${nuevo?"Día nuevo":"Este día ya está apuntado: puedes cambiarlo."}</p>
+    <label>Horas trabajadas<input id="f-horas" inputmode="decimal" placeholder="Ej.: 4,5 o 4:30" value="${esc(show(v.horas))}"></label>
+    <div class="fila">
+      <label>Km inicial<input id="f-kmini" inputmode="decimal" placeholder="Ej.: 12340" value="${esc(show(v.kmIni))}"></label>
+      <label>Km final<input id="f-kmfin" inputmode="decimal" placeholder="Ej.: 12398" value="${esc(show(v.kmFin))}"></label>
+    </div>
+    <label>Propinas (€)<input id="f-prop" inputmode="decimal" placeholder="0" value="${esc(show(v.propinas))}"></label>
+    <div id="previa"></div>
+    <div class="botones"><button class="btn" id="f-guardar">${nuevo?"Guardar día":"Guardar cambios"}</button>${nuevo?"":'<button class="btn mal" id="f-borrar">Borrar</button>'}</div>
+  </section>`;
+  const $=id=>document.getElementById(id);
+  const leer=()=>({horas:leerNum($("f-horas").value),kmIni:leerNum($("f-kmini").value),kmFin:leerNum($("f-kmfin").value),
+    propinas:$("f-prop").value.trim()?leerNum($("f-prop").value):0,
+    eurHora:d?d.eurHora:cfg.eurHora,eur10km:d?d.eur10km:cfg.eur10km});
+  const previa=()=>{const x=leer();
+    if([x.horas,x.kmIni,x.kmFin].some(isNaN)){$("previa").innerHTML="";return}
+    const c=cuentas(x);
+    $("previa").innerHTML=`<div class="cuentas" style="margin:4px 0 14px">
+      <span>Horas pagadas · ${fmtH(x.horas)}</span><span>${eur(c.pHoras)}</span>
+      <span>Euros x km · ${num(c.km,1)} km</span><span>${eur(c.pKm)}</span>
+      <span>Propinas</span><span>${eur(c.prop)}</span>
+      <span class="t">Total del día</span><span class="t">${eur(c.total)}</span></div>`};
+  ["f-horas","f-kmini","f-kmfin","f-prop"].forEach(id=>$(id).oninput=previa);previa();
+  $("f-fecha").onchange=e=>{if(e.target.value){fechaSel=e.target.value;vApuntar()}};
+  $("f-guardar").onclick=()=>{
+    const x=leer();
+    if(isNaN(x.horas)||x.horas<=0)return toast("Pon las horas trabajadas");
+    if(isNaN(x.kmIni)||isNaN(x.kmFin))return toast("Pon el km inicial y el final");
+    if(x.kmFin<x.kmIni)return toast("El km final es menor que el inicial");
+    if(isNaN(x.propinas)||x.propinas<0)return toast("Las propinas no son un número válido");
+    dias[fechaSel]=x;guardarDias();mesSel=fechaSel.slice(0,7);
+    toast(`Guardado · ${eur(cuentas(x).total)}`);vApuntar();
+  };
+  if(!nuevo)$("f-borrar").onclick=()=>{if(confirm(`¿Borrar ${fechaLarga(fechaSel).toLowerCase()}?`)){delete dias[fechaSel];guardarDias();toast("Día borrado");vApuntar()}};
+}
+
+/* ---------- Mes ---------- */
+function textoMes(mes){
+  const fs=diasDelMes(mes),[a,m]=mes.split("-").map(Number);
+  const T={h:0,pH:0,km:0,pKm:0,prop:0,total:0};
+  const bloques=fs.map(f=>{const d=dias[f],c=cuentas(d);
+    T.h+=d.horas;T.pH+=c.pHoras;T.km+=c.km;T.pKm+=c.pKm;T.prop+=c.prop;T.total+=c.total;
+    return `${fechaLarga(f)}
+Horas trabajadas: ${fmtH(d.horas)}
+Horas pagadas: ${fmtH(d.horas)} x ${eur(d.eurHora)} = ${eur(c.pHoras)}
+Km inicial: ${num(d.kmIni,1)} · Km final: ${num(d.kmFin,1)} (${num(c.km,1)} km)
+Euros x km: ${eur(c.pKm)}
+Propinas: ${eur(c.prop)}
+Total del día: ${eur(c.total)}`});
+  const titulo=`REPARTO DE PAELLAS · ${MESES[m-1].toUpperCase()} ${a}`;
+  if(!fs.length)return {texto:`${titulo}\n\nNo hay días apuntados.`,T,n:0};
+  return {n:fs.length,T,texto:`${titulo}
+
+${bloques.join("\n\n")}
+
+RESUMEN DEL MES
+Días trabajados: ${fs.length}
+Horas trabajadas: ${fmtH(T.h)}
+Horas pagadas: ${eur(r2(T.pH))}
+Km recorridos: ${num(T.km,1)} km
+Euros x km: ${eur(r2(T.pKm))}
+Propinas: ${eur(r2(T.prop))}
+TOTAL: ${eur(r2(T.total))}`};
+}
+function vMes(){
+  const [a,m]=mesSel.split("-").map(Number),{texto,T,n}=textoMes(mesSel);
+  const lista=diasDelMes(mesSel).map(f=>`<div class="dia" data-f="${f}"><div>${fechaLarga(f)}<small>${fmtH(dias[f].horas)} · ${num(cuentas(dias[f]).km,1)} km · ${eur(cuentas(dias[f]).prop)} propinas</small></div><span class="eur">${eur(cuentas(dias[f]).total)} ›</span></div>`).join("");
+  document.getElementById("view").innerHTML=`<h1>Resumen del mes</h1>
+  <div class="mes"><button id="m-ant" aria-label="Mes anterior">‹</button><b>${MESES[m-1]} ${a}</b><button id="m-sig" aria-label="Mes siguiente">›</button></div>
+  ${n?`<section class="card"><div class="cuentas">
+    <span>Días trabajados</span><span>${n}</span>
+    <span>Horas pagadas · ${fmtH(T.h)}</span><span>${eur(r2(T.pH))}</span>
+    <span>Euros x km · ${num(T.km,1)} km</span><span>${eur(r2(T.pKm))}</span>
+    <span>Propinas</span><span>${eur(r2(T.prop))}</span>
+    <span class="t">Total</span><span class="t">${eur(r2(T.total))}</span></div></section>
+  <section class="card"><h3>Días</h3><p class="nota">Toca un día para cambiarlo.</p>${lista}</section>`:'<section class="card"><p class="nota" style="margin:0">No hay días apuntados este mes.</p></section>'}
+  <section class="card"><h3>Texto del mes</h3><pre id="m-texto">${esc(texto)}</pre>
+    <div class="botones"><button class="btn" id="m-copiar">Copiar texto</button>${navigator.share?'<button class="btn ghost" id="m-compartir">Compartir</button>':""}</div></section>`;
+  const mover=k=>{const d=new Date(a,m-1+k,1);mesSel=`${d.getFullYear()}-${pad(d.getMonth()+1)}`;vMes()};
+  document.getElementById("m-ant").onclick=()=>mover(-1);
+  document.getElementById("m-sig").onclick=()=>mover(1);
+  document.querySelectorAll(".dia").forEach(e=>e.onclick=()=>{fechaSel=e.dataset.f;setTab("apuntar")});
+  document.getElementById("m-copiar").onclick=()=>copiar(texto,"Texto copiado");
+  const sh=document.getElementById("m-compartir");if(sh)sh.onclick=()=>navigator.share({text:texto}).catch(()=>{});
+}
+async function copiar(t,ok){
+  try{await navigator.clipboard.writeText(t);toast(ok)}
+  catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();
+    try{document.execCommand("copy");toast(ok)}catch(_){toast("No se pudo copiar")}ta.remove()}
+}
+
+/* ---------- Ajustes ---------- */
+function vAjustes(){
+  document.getElementById("view").innerHTML=`<h1>Ajustes</h1>
+  <section class="card"><h3>Tarifas</h3>
+    <p class="nota">Si cambian, los días ya apuntados conservan la tarifa que tenían.</p>
+    <div class="fila">
+      <label>€ por hora<input id="a-hora" inputmode="decimal" value="${String(cfg.eurHora).replace(".",",")}"></label>
+      <label>€ por cada 10 km<input id="a-km" inputmode="decimal" value="${String(cfg.eur10km).replace(".",",")}"></label>
+    </div>
+    <button class="btn ancho" id="a-guardar">Guardar tarifas</button></section>
+  <div id="avisos">${avisosHTML()}</div>
+  <section class="card"><h3>Copia de seguridad</h3>
+    <p class="nota">Los datos solo están en este móvil. Si borras el icono se pierden: copia todo de vez en cuando y guárdalo en Notas o mándatelo por WhatsApp.</p>
+    <button class="btn ancho" id="a-copia">Copiar todos mis datos</button>
+    <label style="margin-top:14px">Restaurar desde una copia<textarea id="a-pegar" rows="3" placeholder="Pega aquí la copia"></textarea></label>
+    <button class="btn ghost ancho" id="a-restaurar">Restaurar</button></section>`;
+  const $=id=>document.getElementById(id);
+  $("a-guardar").onclick=()=>{const h=leerNum($("a-hora").value),k=leerNum($("a-km").value);
+    if(!(h>0)||!(k>=0))return toast("Revisa las tarifas");cfg={eurHora:h,eur10km:k};lsSet("paellas_cfg",cfg);toast("Tarifas guardadas")};
+  $("a-copia").onclick=()=>copiar(JSON.stringify({app:"paellas",dias,cfg}),"Copia guardada en el portapapeles");
+  $("a-restaurar").onclick=()=>{let o;try{o=JSON.parse($("a-pegar").value)}catch(e){return toast("Eso no es una copia válida")}
+    if(!o||typeof o.dias!=="object")return toast("Eso no es una copia válida");
+    if(!confirm(`Se cambiarán tus datos por los de la copia (${Object.keys(o.dias).length} días). ¿Seguir?`))return;
+    dias=o.dias;if(o.cfg)cfg=Object.assign(cfg,o.cfg);lsSet("paellas_cfg",cfg);guardarDias();toast("Datos restaurados");vAjustes()};
+  bindAvisos(()=>{$("avisos").innerHTML=avisosHTML();bindAvisos()});
+}
+
+/* ---------- Avisos ---------- */
+const SERVIDOR_POR_DEFECTO="https://paellas-avisos.moyyano.workers.dev";
+// El servidor solo avisa los días que aún no están apuntados
+function estadoParaServidor(){return {apuntados:Object.keys(dias).sort().slice(-20)}}
+
+const lsGetA=k=>{try{return JSON.parse(localStorage.getItem(k)||"{}")}catch(e){return {}}};
+const lsSetA=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+function cfgAvisos(){return lsGetA("avisos_cfg")}
+const escA=esc;
+
+function avisosHTML(){
+  const c=cfgAvisos(), soporta="serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+  const instalada=navigator.standalone===true||matchMedia("(display-mode: standalone)").matches;
+  const activos=!!c.activo&&soporta&&Notification.permission==="granted";
+  let nota='<p class="nota">Sábados y domingos a las 18:15, solo si ese día aún no has apuntado nada.</p>';
+  if(!instalada) nota+='<p class="nota">Para recibir avisos, abre la app desde su icono en la pantalla de inicio (Compartir → Añadir a pantalla de inicio).</p>';
+  else if(!soporta) nota+='<p class="nota">Este iPhone no admite avisos de apps web. Hace falta iOS 16.4 o posterior.</p>';
+  return `<section class="card"><h3>${activos?"Avisos activados":"Activa los avisos"}</h3>${nota}
+    <label>Servidor de avisos<input id="av-url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="${escA(c.url||SERVIDOR_POR_DEFECTO)}"></label>
+    <label>Clave<input id="av-clave" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tu clave" value="${escA(c.clave||"")}"></label>
+    <div class="botones"><button class="btn" id="av-on">${activos?"Volver a activar":"Activar avisos"}</button>${activos?' <button class="btn ghost" id="av-test">Enviar prueba</button>':""}</div></section>`;
+}
+function b64aBytes(s){s=s.replace(/-/g,"+").replace(/_/g,"/");s+="===".slice((s.length+3)%4);return Uint8Array.from(atob(s),c=>c.charCodeAt(0))}
+async function llamar(c,ruta,datos){
+  const r=await fetch(c.url.replace(/\/+$/,"")+ruta,datos?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({clave:c.clave,...datos})}:{});
+  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||"el servidor respondió "+r.status);return o}
+async function syncEstado(){const c=cfgAvisos();if(!c.activo)return;try{await llamar(c,"/estado",{estado:estadoParaServidor()})}catch(e){}}
+
+function bindAvisos(alRefrescar){
+  const on=document.getElementById("av-on");if(!on)return;
+  on.onclick=async()=>{
+    const c={url:document.getElementById("av-url").value.trim(),clave:document.getElementById("av-clave").value.trim()};
+    if(!/^https:\/\//.test(c.url)||!c.clave){toast("Pon la dirección del servidor (empieza por https://) y tu clave.");return}
+    if(!("serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window)){toast("Abre la app desde su icono en la pantalla de inicio para activar los avisos.");return}
+    try{
+      // El permiso se pide lo primero, dentro del clic, o iOS lo ignora
+      const permiso=await Notification.requestPermission();
+      if(permiso!=="granted"){toast("Sin permiso no hay avisos. Actívalo en Ajustes → Notificaciones.");return}
+      const {publicKey}=await llamar(c,"/vapid");
+      const reg=await navigator.serviceWorker.ready;
+      let sub=await reg.pushManager.getSubscription();
+      if(sub&&sub.options&&sub.options.applicationServerKey){const k=new Uint8Array(sub.options.applicationServerKey),n=b64aBytes(publicKey);
+        if(k.length!==n.length||k.some((x,i)=>x!==n[i])){await sub.unsubscribe();sub=null}}
+      if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64aBytes(publicKey)});
+      await llamar(c,"/suscribir",{subscription:sub.toJSON()});
+      lsSetA("avisos_cfg",{...c,activo:true});await syncEstado();if(alRefrescar)alRefrescar();toast("Avisos activados");
+    }catch(e){toast("No se pudieron activar: "+e.message)}
+  };
+  const t=document.getElementById("av-test");
+  if(t)t.onclick=async()=>{try{await llamar(cfgAvisos(),"/prueba",{});toast("Aviso de prueba enviado")}catch(e){toast("No se pudo enviar: "+e.message)}};
+}
+
+/* ---------- Arranque ---------- */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+  navigator.serviceWorker.addEventListener("message",e=>{const t=e.data&&e.data.tab;if(TABS.includes(t)){if(t==="apuntar")fechaSel=hoyISO();setTab(t)}});
+}
+window.addEventListener("hashchange",()=>{const t=location.hash.slice(1);if(TABS.includes(t)&&t!==tab)setTab(t)});
+pintar();
+syncEstado();
+</script>
+</body>
+</html>
